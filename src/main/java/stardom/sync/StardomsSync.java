@@ -6,6 +6,7 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.ServerCommandSource;
@@ -22,6 +23,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.time.LocalTime;
 import java.util.Objects;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.TimeUnit;
 
 
@@ -47,11 +50,13 @@ public class StardomsSync implements ModInitializer {
 		CommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> dispatcher.register(LiteralArgumentBuilder.<ServerCommandSource>literal("realtime")
                 .executes(StardomsSync.this::executeRealtimeCommand)));
 
-		/*ServerTickEvents.END_SERVER_TICK.register(this::syncWeather);
-		CommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> dispatcher.register(LiteralArgumentBuilder.<ServerCommandSource>literal("realweather")
-                .executes(StardomsSync.this::executeRealtimeCommand)));*/
-		// Start fetching weather data periodically
-		startFetchingWeather();
+		ServerLifecycleEvents.SERVER_STARTED.register(this::serverStarted);
+		CommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> dispatcher.register(LiteralArgumentBuilder.<ServerCommandSource>literal("realtime")
+				.executes(StardomsSync.this::executeRealtimeCommand)));
+	}
+
+	private void serverStarted(MinecraftServer server) {
+		startFetchingWeather(server); // Pass the MinecraftServer instance
 	}
 
 	private void syncTime(MinecraftServer server) {
@@ -70,17 +75,17 @@ public class StardomsSync implements ModInitializer {
 		return 1;
 	}
 
-	private void startFetchingWeather() {
+	private void startFetchingWeather(MinecraftServer server) {
 		fetchWeatherTimer = new Timer();
 		fetchWeatherTimer.schedule(new TimerTask() {
 			@Override
 			public void run() {
-				fetchWeatherData();
+				fetchWeatherData(server);
 			}
 		}, 0, FETCH_INTERVAL_SECONDS * 1000); // Schedule to run every FETCH_INTERVAL_SECONDS seconds
 	}
 
-	private void fetchWeatherData() {
+	private void fetchWeatherData(MinecraftServer server) {
 		Request request = new Request.Builder()
 				.url(WEATHER_API_URL)
 				.build();
@@ -92,7 +97,7 @@ public class StardomsSync implements ModInitializer {
 					if (response.isSuccessful()) {
 						String responseBody = response.body().string();
 						WeatherData weatherData = gson.fromJson(responseBody, WeatherData.class);
-						applyWeatherToMinecraft(weatherData);
+						applyWeatherToMinecraft(server, weatherData); // Pass the MinecraftServer instance
 					} else {
 						LOGGER.error("Failed to fetch weather data: {}", response.code());
 					}
@@ -118,12 +123,15 @@ public class StardomsSync implements ModInitializer {
 			// Example: Set Minecraft weather based on external weather condition
 			if ("Clear".equalsIgnoreCase(mainWeather)) {
 				server.getWorld(World.OVERWORLD).setWeather(0, 600, true, false); // Clear weather
+				server.sendMessage(Text.literal("clear"));
 			} else if ("Rain".equalsIgnoreCase(mainWeather) || "Drizzle".equalsIgnoreCase(mainWeather)) {
 				server.getWorld(World.OVERWORLD).setWeather(600, 1200, true, true); // Rain
+				server.sendMessage(Text.literal("rain"));
 			} else if ("Thunderstorm".equalsIgnoreCase(mainWeather)) {
 				server.getWorld(World.OVERWORLD).setWeather(600, 1200, true, true); // Thunderstorm
+				server.sendMessage(Text.literal("pissing it down"));
 			} else {
-				// Handle other weather conditions or defaults
+				// what else
 			}
 
 			LOGGER.info("Applied weather condition to Minecraft: {}", mainWeather);
@@ -131,6 +139,4 @@ public class StardomsSync implements ModInitializer {
 			LOGGER.warn("Weather data is null or empty");
 		}
 	}
-
-}
 }
