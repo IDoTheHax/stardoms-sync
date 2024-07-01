@@ -1,0 +1,6 @@
+{
+  "command.weather.startsync": "Local Weather activated",
+  "command.weather.stopsync": "Local Weather Stopped",
+  "command.weather.notactive": "Local Weather Isnt Active"
+}
+
