@@ -42,7 +42,8 @@ dependencies {
 	// Fabric API. This is technically optional, but you probably want it anyway.
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-
+	// Weather
+	implementation 'com.squareup.okhttp3:okhttp:4.9.3'
 
 }
 
